@@ -1,0 +1,14 @@
+include LICENSE
+include README.md
+include pyproject.toml
+include setup.cfg
+include setup.py
+recursive-include lightfm *.py *.pyx.template *.c
+recursive-include tests *.py
+recursive-include lightfm/datasets *.py
+exclude lightfm/_lightfm_fast_*.pyx
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude *.so
+global-exclude .DS_Store
