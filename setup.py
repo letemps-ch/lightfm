@@ -38,6 +38,97 @@ def define_extensions(use_openmp):
         ]
 
 
+def generate_pyx_files():
+    """Generate .pyx files from template before Cython compilation"""
+    openmp_import = textwrap.dedent(
+        """
+         from cython.parallel import parallel, prange
+         cimport openmp
+    """
+    )
+
+    lock_init = textwrap.dedent(
+        """
+         cdef openmp.omp_lock_t THREAD_LOCK
+         openmp.omp_init_lock(&THREAD_LOCK)
+    """
+    )
+
+    params = (
+        (
+            "no_openmp",
+            dict(
+                openmp_import="",
+                nogil_block="with nogil:",
+                range_block="range",
+                thread_num="0",
+                lock_init="",
+                lock_acquire="",
+                lock_release="",
+            ),
+        ),
+        (
+            "openmp",
+            dict(
+                openmp_import=openmp_import,
+                nogil_block="with nogil, parallel(num_threads=num_threads):",
+                range_block="prange",
+                thread_num="openmp.omp_get_thread_num()",
+                lock_init=lock_init,
+                lock_acquire="openmp.omp_set_lock(&THREAD_LOCK)",
+                lock_release="openmp.omp_unset_lock(&THREAD_LOCK)",
+            ),
+        ),
+    )
+
+    file_dir = os.path.join(os.path.dirname(__file__), "lightfm")
+    template_path = os.path.join(file_dir, "_lightfm_fast.pyx.template")
+    
+    # Only generate if template exists
+    if os.path.exists(template_path):
+        with open(template_path, "r") as fl:
+            template = fl.read()
+
+        for variant, template_params in params:
+            pyx_path = os.path.join(file_dir, "_lightfm_fast_{}.pyx".format(variant))
+            with open(pyx_path, "w") as fl:
+                fl.write(template.format(**template_params))
+
+
+def cythonize_extensions(use_openmp):
+    """Cythonize .pyx files to .c files"""
+    try:
+        from Cython.Build import cythonize
+    except ImportError:
+        # Cython not available, assume .c files exist
+        return define_extensions(use_openmp)
+    
+    # Generate .pyx files from template
+    generate_pyx_files()
+    
+    # Define extensions for Cython
+    extensions = []
+    if not use_openmp:
+        extensions.append(
+            Extension(
+                "lightfm._lightfm_fast_no_openmp",
+                ["lightfm/_lightfm_fast_no_openmp.pyx"],
+            )
+        )
+    else:
+        extensions.append(
+            Extension(
+                "lightfm._lightfm_fast_openmp",
+                ["lightfm/_lightfm_fast_openmp.pyx"],
+                extra_link_args=["-fopenmp"],
+                extra_compile_args=["-fopenmp"],
+            )
+        )
+    
+    # Cythonize and return
+    return cythonize(extensions, compiler_directives={'language_level': "3"})
+
+
 class Cythonize(Command):
     """
     Compile the extension .pyx files.
@@ -51,63 +142,10 @@ class Cythonize(Command):
     def finalize_options(self):
         pass
 
-    def generate_pyx(self):
-        openmp_import = textwrap.dedent(
-            """
-             from cython.parallel import parallel, prange
-             cimport openmp
-        """
-        )
-
-        lock_init = textwrap.dedent(
-            """
-             cdef openmp.omp_lock_t THREAD_LOCK
-             openmp.omp_init_lock(&THREAD_LOCK)
-        """
-        )
-
-        params = (
-            (
-                "no_openmp",
-                dict(
-                    openmp_import="",
-                    nogil_block="with nogil:",
-                    range_block="range",
-                    thread_num="0",
-                    lock_init="",
-                    lock_acquire="",
-                    lock_release="",
-                ),
-            ),
-            (
-                "openmp",
-                dict(
-                    openmp_import=openmp_import,
-                    nogil_block="with nogil, parallel(num_threads=num_threads):",
-                    range_block="prange",
-                    thread_num="openmp.omp_get_thread_num()",
-                    lock_init=lock_init,
-                    lock_acquire="openmp.omp_set_lock(&THREAD_LOCK)",
-                    lock_release="openmp.omp_unset_lock(&THREAD_LOCK)",
-                ),
-            ),
-        )
-
-        file_dir = os.path.join(os.path.dirname(__file__), "lightfm")
-
-        with open(os.path.join(file_dir, "_lightfm_fast.pyx.template"), "r") as fl:
-            template = fl.read()
-
-        for variant, template_params in params:
-            with open(
-                os.path.join(file_dir, "_lightfm_fast_{}.pyx".format(variant)), "w"
-            ) as fl:
-                fl.write(template.format(**template_params))
-
     def run(self):
         from Cython.Build import cythonize
 
-        self.generate_pyx()
+        generate_pyx_files()
 
         cythonize(
             [
@@ -163,6 +201,14 @@ use_openmp = not sys.platform.startswith("darwin") and not sys.platform.startswi
     "win"
 )
 
+# Check if being built via PEP 517
+if os.environ.get("_PYPROJECT_HOOKS_BUILD_BACKEND"):
+    # Running via PEP 517, try to cythonize
+    ext_modules = cythonize_extensions(use_openmp)
+else:
+    # Traditional setup.py install, use pre-compiled .c files
+    ext_modules = define_extensions(use_openmp)
+
 long_description = pathlib.Path(__file__).parent.joinpath("README.md").read_text()
 
 setup(
@@ -186,5 +232,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
-    ext_modules=define_extensions(use_openmp),
+    ext_modules=ext_modules,
 )

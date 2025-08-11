@@ -1,0 +1,90 @@
+[build-system]
+requires = [
+    "setuptools>=45",
+    "wheel",
+    "numpy",
+    "Cython>=0.29.0",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lightfm"
+dynamic = ["version"]
+description = "LightFM recommendation model"
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "MIT"}
+authors = [
+    {name = "Lyst Ltd (Maciej Kula)", email = "data@ly.st"}
+]
+maintainers = [
+    {name = "Lyst Ltd (Maciej Kula)", email = "data@ly.st"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "numpy",
+    "scipy>=0.17.0",
+    "requests",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+dev = [
+    "pytest",
+    "black==22.1.0",
+    "flake8==4.0.1",
+    "pre-commit==2.17.0",
+    "Cython>=0.29.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/lyst/lightfm"
+Documentation = "https://making.lyst.com/lightfm/docs/home.html"
+Repository = "https://github.com/lyst/lightfm"
+Issues = "https://github.com/lyst/lightfm/issues"
+
+[tool.setuptools]
+packages = ["lightfm", "lightfm.datasets"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {attr = "lightfm.version.__version__"}
+
+[tool.setuptools.package-data]
+"*" = ["*.c"]
+
+[tool.black]
+line-length = 100
+target-version = ['py37']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
